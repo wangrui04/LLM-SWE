@@ -7,7 +7,7 @@ This course explores the transformative impact of Large Language Models (LLMs) o
 
 ```text
 LLM-SWE/
-├── llm-api/
+├── llm-debugger/
 │   ├── .env              # Local environment variables / API keys (untracked)
 │   └── code.py           # Gemini-powered debugging script
 ├── .gitignore            # Git ignore rules (protecting .env)
@@ -16,12 +16,12 @@ LLM-SWE/
 └── requirements.txt      # Project dependencies
 ```
 
-## AI Code Debugger (`llm-api`)
+## AI Code Debugger (`llm-debugger`)
 
-The `llm-api` module implements an automated debugging assistant using Google's Gemini API (`gemini-3.6-flash`).
+The `llm-debugger` module implements an automated debugging assistant using Google's Gemini API (`gemini-3.6-flash`).
 
 ### Function: `debug_me`
-Located in `llm-api/code.py`:
+Located in `llm-debugger/code.py`:
 
 ```python
 def debug_me(language: str, code_snippet: str, error_log: str) -> str
@@ -49,7 +49,7 @@ py -m pip install -r requirements.txt
 The `.env` file is used to store sensitive information such as API keys without hard-coding them directly into the source code.
 
 1. Obtain an API key from [Google AI Studio](https://aistudio.google.com/).
-2. Create a `.env` file inside the `llm-api` folder:
+2. Create a `.env` file inside the `llm-debugger` folder:
 
 ```env
 GEMINI_API_KEY="your_api_key_here"
@@ -71,7 +71,7 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 Make sure the `.env` file is not committed to GitHub. Add the following line to `.gitignore`:
 
 ```gitignore
-llm-api/.env
+llm-debugger/.env
 ```
 
 Verify that `.env` is not being tracked by Git:
@@ -93,10 +93,10 @@ If no output appears, the file is not being tracked.
 
 ## Running the Code
 
-Run the sample debugger directly from the `llm-api` directory:
+Run the sample debugger directly from the `llm-debugger` directory:
 
 ```bash
-cd llm-api
+cd llm-debugger
 py code.py
 # or: python code.py
 ```
