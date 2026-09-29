@@ -1,7 +1,13 @@
 import unittest
 from datetime import date
 
-from transaction_history import Transaction, available_categories, filter_transactions
+from transaction_history import (
+    NO_RESULTS_MESSAGE,
+    Transaction,
+    available_categories,
+    filter_transactions,
+    format_transactions,
+)
 
 
 TRANSACTIONS = [
@@ -59,6 +65,122 @@ class TransactionHistoryTests(unittest.TestCase):
                 start_date="2026-03-01",
                 end_date="2026-02-01",
             )
+
+
+SEARCH_TRANSACTIONS = [
+    Transaction(date(2026, 1, 2), "Morning latte", 4.50, "Food & Dining", "Blue Bottle Coffee"),
+    Transaction(date(2026, 1, 9), "Weekly groceries", 62.10, "Food & Dining", "Trader Joe's"),
+    Transaction(date(2026, 1, 15), "Monthly pass", 25.00, "Transport", "City Transit"),
+    Transaction(date(2026, 2, 3), "Coffee beans", 18.00, "Food & Dining", "Blue Bottle Coffee"),
+    Transaction(date(2026, 2, 10), "Refund", -12.00, None),
+]
+
+
+def descriptions(transactions):
+    return [transaction.description for transaction in transactions]
+
+
+class TransactionSearchTests(unittest.TestCase):
+    def test_search_matches_merchant(self):
+        results = filter_transactions(SEARCH_TRANSACTIONS, search="blue bottle")
+
+        self.assertEqual(descriptions(results), ["Morning latte", "Coffee beans"])
+
+    def test_search_matches_description(self):
+        results = filter_transactions(SEARCH_TRANSACTIONS, search="groceries")
+
+        self.assertEqual(descriptions(results), ["Weekly groceries"])
+
+    def test_search_matches_category(self):
+        results = filter_transactions(SEARCH_TRANSACTIONS, search="transport")
+
+        self.assertEqual(descriptions(results), ["Monthly pass"])
+
+    def test_search_matches_partial_terms(self):
+        results = filter_transactions(SEARCH_TRANSACTIONS, search="coff")
+
+        self.assertEqual(descriptions(results), ["Morning latte", "Coffee beans"])
+
+    def test_search_is_case_insensitive(self):
+        lower = filter_transactions(SEARCH_TRANSACTIONS, search="trader joe's")
+        upper = filter_transactions(SEARCH_TRANSACTIONS, search="TRADER JOE'S")
+        mixed = filter_transactions(SEARCH_TRANSACTIONS, search="TrAdEr JoE's")
+
+        self.assertEqual(descriptions(lower), ["Weekly groceries"])
+        self.assertEqual(upper, lower)
+        self.assertEqual(mixed, lower)
+
+    def test_leading_and_trailing_whitespace_is_ignored(self):
+        results = filter_transactions(SEARCH_TRANSACTIONS, search="  refund\t ")
+
+        self.assertEqual(descriptions(results), ["Refund"])
+
+    def test_repeated_inner_whitespace_is_ignored(self):
+        results = filter_transactions(SEARCH_TRANSACTIONS, search="city    transit")
+
+        self.assertEqual(descriptions(results), ["Monthly pass"])
+
+    def test_empty_search_returns_all_transactions(self):
+        for search in (None, "", "   "):
+            with self.subTest(search=search):
+                self.assertEqual(filter_transactions(SEARCH_TRANSACTIONS, search=search), SEARCH_TRANSACTIONS)
+
+    def test_no_match_returns_empty_result(self):
+        self.assertEqual(filter_transactions(SEARCH_TRANSACTIONS, search="airline"), [])
+
+    def test_no_match_displays_empty_state(self):
+        results = filter_transactions(SEARCH_TRANSACTIONS, search="airline")
+
+        self.assertEqual(format_transactions(results), NO_RESULTS_MESSAGE)
+
+    def test_matches_are_displayed(self):
+        results = filter_transactions(SEARCH_TRANSACTIONS, search="transit")
+
+        self.assertEqual(format_transactions(results), "2026-01-15  City Transit  25.00")
+
+    def test_clearing_search_restores_full_list(self):
+        searched = filter_transactions(SEARCH_TRANSACTIONS, search="coffee")
+        cleared = filter_transactions(SEARCH_TRANSACTIONS, search="")
+
+        self.assertNotEqual(searched, SEARCH_TRANSACTIONS)
+        self.assertEqual(cleared, SEARCH_TRANSACTIONS)
+
+    def test_clearing_search_restores_filtered_list(self):
+        filters = {"category": "Food & Dining", "start_date": "2026-01-01", "end_date": "2026-01-31"}
+        cleared = filter_transactions(SEARCH_TRANSACTIONS, search=None, **filters)
+
+        self.assertEqual(cleared, filter_transactions(SEARCH_TRANSACTIONS, **filters))
+        self.assertEqual(descriptions(cleared), ["Morning latte", "Weekly groceries"])
+
+    def test_search_with_date_filter(self):
+        results = filter_transactions(
+            SEARCH_TRANSACTIONS,
+            search="blue bottle",
+            start_date="2026-02-01",
+            end_date="2026-02-28",
+        )
+
+        self.assertEqual(descriptions(results), ["Coffee beans"])
+
+    def test_search_with_category_filter(self):
+        results = filter_transactions(SEARCH_TRANSACTIONS, search="pass", category="food dining")
+
+        self.assertEqual(results, [])
+
+    def test_search_with_date_and_category_filters(self):
+        results = filter_transactions(
+            SEARCH_TRANSACTIONS,
+            search=" COFFEE ",
+            category="Food & Dining",
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+        )
+
+        self.assertEqual(descriptions(results), ["Morning latte"])
+
+    def test_non_string_search_is_rejected(self):
+        with self.assertRaises(TypeError):
+            filter_transactions(SEARCH_TRANSACTIONS, search=42)
 
 
 if __name__ == "__main__":

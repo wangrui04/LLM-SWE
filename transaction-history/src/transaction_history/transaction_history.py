@@ -8,12 +8,16 @@ from typing import Iterable
 
 @dataclass(frozen=True)
 class Transaction:
-    """A transaction record that can be filtered by date and category."""
+    """A transaction record that can be filtered by date, category, and search."""
 
     date: date
     description: str
     amount: float
     category: str | None = None
+    merchant: str | None = None
+
+
+NO_RESULTS_MESSAGE = "No transactions match your search."
 
 
 def normalize_category(category: str | None) -> str | None:
@@ -23,6 +27,28 @@ def normalize_category(category: str | None) -> str | None:
 
     normalized = re.sub(r"[^a-z0-9]+", " ", category.casefold()).strip()
     return normalized or None
+
+
+def normalize_search(search: str | None) -> str | None:
+    """Return a case-insensitive search key with surrounding and repeated spaces removed.
+
+    An empty or whitespace-only search clears the search filter.
+    """
+    if search is None:
+        return None
+    if not isinstance(search, str):
+        raise TypeError("search must be a string or None")
+
+    normalized = " ".join(search.casefold().split())
+    return normalized or None
+
+
+def _matches_search(transaction: Transaction, search_key: str) -> bool:
+    fields = (transaction.merchant, transaction.description, transaction.category)
+    return any(
+        field is not None and search_key in " ".join(field.casefold().split())
+        for field in fields
+    )
 
 
 def available_categories(transactions: Iterable[Transaction]) -> list[str]:
@@ -51,11 +77,14 @@ def filter_transactions(
     category: str | None = None,
     start_date: date | str | None = None,
     end_date: date | str | None = None,
+    search: str | None = None,
 ) -> list[Transaction]:
-    """Filter transactions by category and inclusive date bounds.
+    """Filter transactions by category, inclusive date bounds, and a search term.
 
     A missing category or an empty category selection clears the category filter.
     Category matching ignores capitalization, whitespace, and punctuation.
+    Search matches merchant, description, or category, ignoring capitalization
+    and extra whitespace; an empty search clears the search filter.
     """
     start = _parse_date(start_date)
     end = _parse_date(end_date)
@@ -63,10 +92,22 @@ def filter_transactions(
         raise ValueError("start_date must be before or equal to end_date")
 
     category_key = normalize_category(category)
+    search_key = normalize_search(search)
     return [
         transaction
         for transaction in transactions
         if (category_key is None or normalize_category(transaction.category) == category_key)
         and (start is None or transaction.date >= start)
         and (end is None or transaction.date <= end)
+        and (search_key is None or _matches_search(transaction, search_key))
     ]
+
+
+def format_transactions(transactions: Iterable[Transaction]) -> str:
+    """Render transactions one per line, or an empty-state message when there are none."""
+    lines = [
+        f"{transaction.date.isoformat()}  {transaction.merchant or transaction.description}"
+        f"  {transaction.amount:.2f}"
+        for transaction in transactions
+    ]
+    return "\n".join(lines) if lines else NO_RESULTS_MESSAGE
