@@ -14,6 +14,10 @@ class Transaction:
     description: str
     amount: float
     category: str | None = None
+    merchant: str | None = None
+
+
+NO_RESULTS_MESSAGE = "No transactions match your search."
 
 
 def _parse_date_value(value: object, field_name: str) -> date:
@@ -36,6 +40,25 @@ def normalize_category(category: str | None) -> str | None:
 
     normalized = re.sub(r"[^a-z0-9]+", " ", category.casefold()).strip()
     return normalized or None
+
+
+def normalize_search(search: str | None) -> str | None:
+    """Return a case-insensitive search key with normalized whitespace."""
+    if search is None:
+        return None
+    if not isinstance(search, str):
+        raise TypeError("search must be a string or None")
+
+    normalized = " ".join(search.casefold().split())
+    return normalized or None
+
+
+def _matches_search(transaction: Transaction, search_key: str) -> bool:
+    fields = (transaction.merchant, transaction.description, transaction.category)
+    return any(
+        field is not None and search_key in " ".join(field.casefold().split())
+        for field in fields
+    )
 
 
 def available_categories(transactions: Iterable[Transaction]) -> list[str]:
@@ -78,6 +101,7 @@ def _filter_transaction_records(
     category: str | None,
     start_date: date | str | None,
     end_date: date | str | None,
+    search: str | None,
 ) -> list[Transaction]:
     start = _parse_date_value(start_date, "start_date") if start_date is not None else None
     end = _parse_date_value(end_date, "end_date") if end_date is not None else None
@@ -85,12 +109,14 @@ def _filter_transaction_records(
         raise ValueError("start_date must be on or before end_date")
 
     category_key = normalize_category(category)
+    search_key = normalize_search(search)
     return [
         transaction
         for transaction in transactions
         if (category_key is None or normalize_category(transaction.category) == category_key)
         and (start is None or transaction.date >= start)
         and (end is None or transaction.date <= end)
+        and (search_key is None or _matches_search(transaction, search_key))
     ]
 
 
@@ -100,6 +126,7 @@ def filter_transactions(
     end_date: date | str | None = None,
     *,
     category: str | None = None,
+    search: str | None = None,
 ) -> list[Transaction] | list[Mapping[str, object]]:
     """Filter mapping records by date or Transaction records by date and category."""
     items = list(transactions)
@@ -108,4 +135,14 @@ def filter_transactions(
             raise ValueError("category filtering requires Transaction records")
         return _filter_mapping_transactions(items, start_date, end_date)
 
-    return _filter_transaction_records(items, category, start_date, end_date)
+    return _filter_transaction_records(items, category, start_date, end_date, search)
+
+
+def format_transactions(transactions: Iterable[Transaction]) -> str:
+    """Render transactions one per line, or an empty-state message when there are none."""
+    lines = [
+        f"{transaction.date.isoformat()}  {transaction.merchant or transaction.description}"
+        f"  {transaction.amount:.2f}"
+        for transaction in transactions
+    ]
+    return "\n".join(lines) if lines else NO_RESULTS_MESSAGE
